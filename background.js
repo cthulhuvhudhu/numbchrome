@@ -3,6 +3,7 @@ let windowCounter = 1;
 
 // Initialize extension
 chrome.runtime.onInstalled.addListener(async () => {
+  console.log('Extension installed/updated');
   // Get existing windows and assign numbers
   const windows = await chrome.windows.getAll();
   const stored = await chrome.storage.local.get(['windowLabels', 'nextCounter']);
@@ -23,12 +24,13 @@ chrome.runtime.onInstalled.addListener(async () => {
     windowCounter = stored.nextCounter || windows.length + 1;
   }
   
-  // Update all existing windows
-  updateAllWindows();
+  // Update all existing windows after a short delay
+  setTimeout(updateAllWindows, 500);
 });
 
 // Handle new window creation
 chrome.windows.onCreated.addListener(async (window) => {
+  console.log('New window created:', window.id);
   const stored = await chrome.storage.local.get(['windowLabels', 'nextCounter']);
   const windowLabels = stored.windowLabels || {};
   
@@ -45,7 +47,7 @@ chrome.windows.onCreated.addListener(async (window) => {
   });
   
   windowCounter++;
-  updateWindow(window.id);
+  setTimeout(() => updateWindow(window.id), 1000);
 });
 
 // Handle window removal
@@ -84,22 +86,32 @@ async function updateAllWindows() {
   }
 }
 
-// Listen for messages from popup
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+// Listen for messages from popup and content scripts
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('Message received:', request);
+  
   if (request.action === 'updateWindowName') {
-    const stored = await chrome.storage.local.get(['windowLabels']);
-    const windowLabels = stored.windowLabels || {};
-    
-    if (windowLabels[request.windowId]) {
-      windowLabels[request.windowId].name = request.name;
-      await chrome.storage.local.set({ windowLabels });
+    chrome.storage.local.get(['windowLabels']).then(stored => {
+      const windowLabels = stored.windowLabels || {};
+      
+      if (windowLabels[request.windowId]) {
+        windowLabels[request.windowId].name = request.name;
+        return chrome.storage.local.set({ windowLabels });
+      }
+    }).then(() => {
       updateWindow(request.windowId);
-    }
+    });
+    
   } else if (request.action === 'getCurrentWindow') {
-    const currentWindow = await chrome.windows.getCurrent();
-    sendResponse({ windowId: currentWindow.id });
+    chrome.windows.getCurrent().then(currentWindow => {
+      sendResponse({ windowId: currentWindow.id });
+    });
+    return true; // Keep message channel open for async response
+    
   } else if (request.action === 'getWindowLabels') {
-    const stored = await chrome.storage.local.get(['windowLabels']);
-    sendResponse({ labels: stored.windowLabels || {} });
+    chrome.storage.local.get(['windowLabels']).then(stored => {
+      sendResponse({ labels: stored.windowLabels || {} });
+    });
+    return true; // Keep message channel open for async response
   }
 });
