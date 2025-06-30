@@ -13,13 +13,24 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border: 2px solid rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(10px);
-  pointer-events: none;
   opacity: 0.9;
-  transition: opacity 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 #window-label-extension:hover {
   opacity: 1;
+  transform: translateY(-1px);
+}
+
+#window-label-extension.needs-naming {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.9; }
+  50% { opacity: 1; }
+  100% { opacity: 0.9; }
 }
 
 .window-label-content {
@@ -41,4 +52,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.window-prompt {
+  font-style: italic;
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+#window-label-extension {
+  /* existing styles... */
+  cursor: move;
+  pointer-events: auto; /* Make it interactive */
+}
+
+#window-label-extension:active {
+  transform: scale(0.95);
 }

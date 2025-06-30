@@ -1,117 +1,235 @@
-// Service worker for managing window creation and storage
-let windowCounter = 1;
-
-// Initialize extension
-chrome.runtime.onInstalled.addListener(async () => {
-  console.log('Extension installed/updated');
-  // Get existing windows and assign numbers
-  const windows = await chrome.windows.getAll();
-  const stored = await chrome.storage.local.get(['windowLabels', 'nextCounter']);
+// // Track window creation and assign numbers
+// chrome.windows.onCreated.addListener(async (window) => {
+//   console.log('New window created:', window.id);
   
-  if (!stored.windowLabels) {
-    const windowLabels = {};
-    windows.forEach((window, index) => {
-      windowLabels[window.id] = {
-        number: index + 1,
-        name: `Window ${index + 1}`
-      };
-    });
-    await chrome.storage.local.set({ 
-      windowLabels,
-      nextCounter: windows.length + 1
-    });
-  } else {
-    windowCounter = stored.nextCounter || windows.length + 1;
-  }
+//   // Get current window data
+//   const result = await chrome.storage.local.get(['windowData', 'nextNumber']);
+//   const windowData = result.windowData || {};
+//   const nextNumber = result.nextNumber || 1;
   
-  // Update all existing windows after a short delay
-  setTimeout(updateAllWindows, 500);
-});
+//   // Only number normal windows (not popups, apps, etc.)
+//   if (window.type === 'normal') {
+//     windowData[window.id] = {
+//       number: nextNumber,
+//       name: null, // null means not named yet
+//       created: Date.now()
+//     };
+    
+//     await chrome.storage.local.set({
+//       windowData: windowData,
+//       nextNumber: nextNumber + 1
+//     });
+    
+//     console.log(`Window ${window.id} assigned number ${nextNumber}`);
+//   }
+// });
 
-// Handle new window creation
+// // Clean up when windows are closed
+// chrome.windows.onRemoved.addListener(async (windowId) => {
+//   const result = await chrome.storage.local.get(['windowData']);
+//   const windowData = result.windowData || {};
+  
+//   delete windowData[windowId];
+//   await chrome.storage.local.set({ windowData });
+  
+//   console.log(`Window ${windowId} removed from storage`);
+// });
+
+// // Handle messages from popup and content scripts
+// chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+//   if (request.action === 'getWindowInfo') {
+//     chrome.windows.getCurrent().then(async (currentWindow) => {
+//       const result = await chrome.storage.local.get(['windowData']);
+//       const windowData = result.windowData || {};
+//       const info = windowData[currentWindow.id];
+      
+//       sendResponse({
+//         windowId: currentWindow.id,
+//         number: info?.number || 1,
+//         name: info?.name,
+//         hasName: !!info?.name
+//       });
+//     });
+//     return true; // Keep message channel open
+    
+//   } else if (request.action === 'setWindowName') {
+//     chrome.storage.local.get(['windowData']).then(async (result) => {
+//       const windowData = result.windowData || {};
+      
+//       if (windowData[request.windowId]) {
+//         windowData[request.windowId].name = request.name;
+//         await chrome.storage.local.set({ windowData });
+        
+//         // Notify all tabs in this window to update their labels
+//         const tabs = await chrome.tabs.query({ windowId: request.windowId });
+//         tabs.forEach(tab => {
+//           chrome.tabs.sendMessage(tab.id, { 
+//             action: 'updateLabel'
+//           }).catch(() => {}); // Ignore errors for pages that can't receive messages
+//         });
+//       }
+      
+//       sendResponse({ success: true });
+//     });
+//     return true; // Keep message channel open
+//   }
+// });
+
+// // Initialize existing windows on extension startup
+// chrome.runtime.onStartup.addListener(async () => {
+//   const windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+//   const result = await chrome.storage.local.get(['windowData', 'nextNumber']);
+//   let windowData = result.windowData || {};
+//   let nextNumber = result.nextNumber || 1;
+  
+//   // Assign numbers to any unnumbered windows
+//   for (const window of windows) {
+//     if (!windowData[window.id]) {
+//       windowData[window.id] = {
+//         number: nextNumber,
+//         name: null,
+//         created: Date.now()
+//       };
+//       nextNumber++;
+//     }
+//   }
+  
+//   await chrome.storage.local.set({ windowData, nextNumber });
+// });
+
+// chrome.runtime.onInstalled.addListener(async () => {
+//   // Same logic as onStartup
+//   const windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+//   const result = await chrome.storage.local.get(['windowData', 'nextNumber']);
+//   let windowData = result.windowData || {};
+//   let nextNumber = result.nextNumber || 1;
+  
+//   for (const window of windows) {
+//     if (!windowData[window.id]) {
+//       windowData[window.id] = {
+//         number: nextNumber,
+//         name: null,
+//         created: Date.now()
+//       };
+//       nextNumber++;
+//     }
+//   }
+  
+//   await chrome.storage.local.set({ windowData, nextNumber });
+// });
+
+// Track window creation and assign numbers
 chrome.windows.onCreated.addListener(async (window) => {
   console.log('New window created:', window.id);
-  const stored = await chrome.storage.local.get(['windowLabels', 'nextCounter']);
-  const windowLabels = stored.windowLabels || {};
   
-  windowCounter = stored.nextCounter || windowCounter;
+  if (window.type === 'normal') {
+    const result = await chrome.storage.local.get(['windowData']);
+    const windowData = result.windowData || {};
+    
+    // Find the lowest unused number
+    const usedNumbers = Object.values(windowData).map(w => w.number);
+    let nextNumber = 1;
+    while (usedNumbers.includes(nextNumber)) {
+      nextNumber++;
+    }
+    
+    windowData[window.id] = {
+      number: nextNumber,
+      name: null,
+      created: Date.now()
+    };
+    
+    await chrome.storage.local.set({ windowData });
+    console.log(`Window ${window.id} assigned number ${nextNumber}`);
+  }
+});
+
+// Clean up when windows are closed
+chrome.windows.onRemoved.addListener(async (windowId) => {
+  const result = await chrome.storage.local.get(['windowData']);
+  const windowData = result.windowData || {};
   
-  windowLabels[window.id] = {
-    number: windowCounter,
-    name: `Window ${windowCounter}`
-  };
+  delete windowData[windowId];
+  await chrome.storage.local.set({ windowData });
   
-  await chrome.storage.local.set({ 
-    windowLabels,
-    nextCounter: windowCounter + 1
+  console.log(`Window ${windowId} removed from storage`);
+});
+
+// Handle messages from popup and content scripts
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'getWindowInfo') {
+    chrome.windows.getCurrent().then(async (currentWindow) => {
+      const result = await chrome.storage.local.get(['windowData']);
+      const windowData = result.windowData || {};
+      const info = windowData[currentWindow.id];
+      
+      sendResponse({
+        windowId: currentWindow.id,
+        number: info?.number || 1,
+        name: info?.name,
+        hasName: !!info?.name
+      });
+    });
+    return true;
+    
+  } else if (request.action === 'setWindowName') {
+    chrome.storage.local.get(['windowData']).then(async (result) => {
+      const windowData = result.windowData || {};
+      
+      if (windowData[request.windowId]) {
+        windowData[request.windowId].name = request.name;
+        await chrome.storage.local.set({ windowData });
+        
+        const tabs = await chrome.tabs.query({ windowId: request.windowId });
+        tabs.forEach(tab => {
+          chrome.tabs.sendMessage(tab.id, { 
+            action: 'updateLabel'
+          }).catch(() => {});
+        });
+      }
+      
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+});
+
+// Initialize existing windows on extension startup
+async function initializeWindows() {
+  const windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+  const result = await chrome.storage.local.get(['windowData']);
+  let windowData = result.windowData || {};
+  
+  // Get all existing window IDs to clean up orphaned data
+  const currentWindowIds = windows.map(w => w.id);
+  
+  // Remove data for windows that no longer exist
+  Object.keys(windowData).forEach(windowId => {
+    if (!currentWindowIds.includes(parseInt(windowId))) {
+      delete windowData[parseInt(windowId)];
+    }
   });
   
-  windowCounter++;
-  setTimeout(() => updateWindow(window.id), 1000);
-});
-
-// Handle window removal
-chrome.windows.onRemoved.addListener(async (windowId) => {
-  const stored = await chrome.storage.local.get(['windowLabels']);
-  const windowLabels = stored.windowLabels || {};
-  
-  delete windowLabels[windowId];
-  await chrome.storage.local.set({ windowLabels });
-});
-
-// Function to update a specific window's label
-async function updateWindow(windowId) {
-  try {
-    const tabs = await chrome.tabs.query({ windowId });
-    tabs.forEach(tab => {
-      chrome.tabs.sendMessage(tab.id, { 
-        action: 'updateLabel',
-        windowId: windowId
-      }).catch(() => {}); // Ignore errors for non-content script pages
-    });
-  } catch (error) {
-    console.log('Error updating window:', error);
-  }
-}
-
-// Function to update all windows
-async function updateAllWindows() {
-  try {
-    const windows = await chrome.windows.getAll();
-    windows.forEach(window => {
-      updateWindow(window.id);
-    });
-  } catch (error) {
-    console.log('Error updating all windows:', error);
-  }
-}
-
-// Listen for messages from popup and content scripts
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('Message received:', request);
-  
-  if (request.action === 'updateWindowName') {
-    chrome.storage.local.get(['windowLabels']).then(stored => {
-      const windowLabels = stored.windowLabels || {};
-      
-      if (windowLabels[request.windowId]) {
-        windowLabels[request.windowId].name = request.name;
-        return chrome.storage.local.set({ windowLabels });
+  // Assign numbers to any unnumbered windows
+  for (const window of windows) {
+    if (!windowData[window.id]) {
+      // Find lowest unused number
+      const usedNumbers = Object.values(windowData).map(w => w.number);
+      let nextNumber = 1;
+      while (usedNumbers.includes(nextNumber)) {
+        nextNumber++;
       }
-    }).then(() => {
-      updateWindow(request.windowId);
-    });
-    
-  } else if (request.action === 'getCurrentWindow') {
-    chrome.windows.getCurrent().then(currentWindow => {
-      sendResponse({ windowId: currentWindow.id });
-    });
-    return true; // Keep message channel open for async response
-    
-  } else if (request.action === 'getWindowLabels') {
-    chrome.storage.local.get(['windowLabels']).then(stored => {
-      sendResponse({ labels: stored.windowLabels || {} });
-    });
-    return true; // Keep message channel open for async response
+      
+      windowData[window.id] = {
+        number: nextNumber,
+        name: null,
+        created: Date.now()
+      };
+    }
   }
-});
+  
+  await chrome.storage.local.set({ windowData });
+}
+
+chrome.runtime.onStartup.addListener(initializeWindows);
+chrome.runtime.onInstalled.addListener(initializeWindows);
