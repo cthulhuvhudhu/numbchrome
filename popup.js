@@ -1,47 +1,54 @@
-// Popup script for managing window names
 document.addEventListener('DOMContentLoaded', async () => {
   const windowNumberEl = document.getElementById('windowNumber');
-  const windowNameEl = document.getElementById('windowName');
+  const currentNameEl = document.getElementById('currentName');
   const nameInput = document.getElementById('nameInput');
-  const renameButton = document.getElementById('renameButton');
+  const saveButton = document.getElementById('saveButton');
   
   // Get current window info
-  const windowResponse = await chrome.runtime.sendMessage({ action: 'getCurrentWindow' });
-  const currentWindowId = windowResponse.windowId;
+  const response = await new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'getWindowInfo' }, resolve);
+  });
   
-  const labelsResponse = await chrome.runtime.sendMessage({ action: 'getWindowLabels' });
-  const labels = labelsResponse.labels;
-  
-  if (labels[currentWindowId]) {
-    const { number, name } = labels[currentWindowId];
+  if (response) {
+    const { windowId, number, name, hasName } = response;
+    
     windowNumberEl.textContent = `#${number}`;
-    windowNameEl.textContent = name;
-    nameInput.value = name;
+    
+    if (hasName) {
+      currentNameEl.textContent = name;
+      nameInput.value = name;
+    } else {
+      currentNameEl.textContent = "Unnamed";
+      currentNameEl.classList.add('unnamed');
+    }
+    
+    // Save name function
+    async function saveName() {
+      const newName = nameInput.value.trim();
+      if (newName) {
+        await new Promise((resolve) => {
+          chrome.runtime.sendMessage({
+            action: 'setWindowName',
+            windowId: windowId,
+            name: newName
+          }, resolve);
+        });
+        
+        window.close();
+      }
+    }
+    
+    // Event listeners
+    saveButton.addEventListener('click', saveName);
+    nameInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        saveName();
+      }
+    });
+    
+    // Auto-select existing name for easy editing
+    if (hasName) {
+      nameInput.select();
+    }
   }
-  
-  // Handle rename button click
-  renameButton.addEventListener('click', async () => {
-    const newName = nameInput.value.trim();
-    if (newName) {
-      await chrome.runtime.sendMessage({
-        action: 'updateWindowName',
-        windowId: currentWindowId,
-        name: newName
-      });
-      
-      windowNameEl.textContent = newName;
-      window.close();
-    }
-  });
-  
-  // Handle Enter key in input
-  nameInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      renameButton.click();
-    }
-  });
-  
-  // Focus input for quick editing
-  nameInput.focus();
-  nameInput.select();
 });

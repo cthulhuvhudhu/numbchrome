@@ -3,7 +3,11 @@
   "name": "Window Labeler",
   "version": "1.0",
   "description": "Automatically number and label browser windows for easy identification",
-  "permissions": [    "storage",    "windows",    "tabs"  ],
+  "permissions": [
+    "storage",
+    "windows",
+    "tabs"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_title": "Window Labeler"
@@ -11,13 +15,9 @@
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [{    "matches": [""],
+  "content_scripts": [{    
+    "matches": ["<all_urls>"],
     "js": ["content.js"],
     "css": ["content.css"]
-  }],
-  "icons": {
-    "16": "icon16.png",
-    "48": "icon48.png",
-    "128": "icon128.png"
-  }
+  }]
 }
